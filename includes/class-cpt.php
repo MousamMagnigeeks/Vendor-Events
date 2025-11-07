@@ -10,6 +10,9 @@ class VEN_CPT {
         add_action('add_meta_boxes', [$this, 'add_event_metabox']);
         add_action('save_post_' . $this->post_type, array($this, 'on_save'), 10, 3);
 
+        add_filter('views_edit-vendor_event', array($this, 'add_recently_published_tab'));
+        add_action('pre_get_posts', array($this, 'filter_vendor_event_recently_published'));
+
         // Add admin columns & filters
         add_filter('manage_edit-' . $this->post_type . '_columns', [$this, 'add_admin_columns']);
         add_action('manage_' . $this->post_type . '_posts_custom_column', [$this, 'render_admin_columns'], 10, 2);
@@ -55,7 +58,49 @@ class VEN_CPT {
             'high'
         );
     }
+    public function add_recently_published_tab($views) {
+        global $wpdb;
 
+        // Count how many were published in the last 7 days
+        $recent_count = $wpdb->get_var("
+            SELECT COUNT(*) 
+            FROM $wpdb->posts 
+            WHERE post_type = 'vendor_event' 
+            AND post_status = 'publish' 
+            AND post_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        ");
+
+        // Check if the "recent" filter is active
+        $class = (isset($_GET['post_status']) && $_GET['post_status'] === 'recently_published') ? ' class="current"' : '';
+
+        // Add custom view link
+        $views['recently_published'] = sprintf(
+            '<a href="%s"%s>Recently Published <span class="count">(%d)</span></a>',
+            admin_url('edit.php?post_type=vendor_event&post_status=recently_published'),
+            $class,
+            $recent_count
+        );
+
+        return $views;
+    }
+
+    public function filter_vendor_event_recently_published($query) {
+        global $pagenow;
+
+        if (!is_admin() || $pagenow !== 'edit.php') {
+            return;
+        }
+
+        if (isset($_GET['post_type']) && $_GET['post_type'] === 'vendor_event' && isset($_GET['post_status']) && $_GET['post_status'] === 'recently_published') {
+            $query->set('post_type', 'vendor_event');
+            $query->set('post_status', 'publish');
+            $query->set('date_query', [
+                [
+                    'after' => '7 days ago'
+                ]
+            ]);
+        }
+    }
     public function render_event_metabox($post) {
         // Retrieve meta values
         $event_url      = get_post_meta($post->ID, 'ven_event_url', true);
