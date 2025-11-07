@@ -1,0 +1,97 @@
+.ven-form input[type="text"], .ven-form input[type="url"], .ven-form input[type="date"], .ven-form select, .ven-form input[type="email"] {
+    width: 100%;
+    max-width: 480px;
+    padding: 8px;
+    margin-bottom: 8px;
+    box-sizing: border-box;
+}
+/* Container styling */
+.ven-events-table-wrapper {
+    overflow-x: auto;
+    margin-top: 20px;
+}
+
+/* Table styling */
+.ven-events-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: Arial, sans-serif;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+/* Header */
+.ven-events-table th {
+    background-color: #a80000; /* Deep red */
+    color: #fff;
+    text-align: left;
+    padding: 12px 15px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* Rows */
+.ven-events-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 14px;
+    color: #333;
+}
+
+/* Alternating rows */
+.ven-events-table tbody tr:nth-child(even) {
+    background-color: #fdf3f3; /* Very light red tint */
+}
+
+/* Hover effect */
+.ven-events-table tbody tr:hover {
+    background-color: #fdeaea; /* Light red hover */
+}
+
+/* Buttons */
+.ven-events-table a.tbutton,
+.ven-events-table-wrapper .tbutton {
+    display: inline-block;
+    padding: 6px 12px;
+    margin: 0 2px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Primary button */
+.ven-events-table-wrapper .tbutton {
+    background-color: #d32f2f; /* Bold red */
+    color: #fff;
+    border: none;
+}
+
+.ven-events-table-wrapper .tbutton:hover {
+    background-color: #b71c1c; /* Darker red */
+}
+
+/* Outline button */
+.ven-events-table a.tbutton {
+    background-color: #fff;
+    color: #d32f2f;
+    border: 1px solid #d32f2f;
+}
+
+.ven-events-table a.tbutton:hover {
+    background-color: #d32f2f;
+    color: #fff;
+    border-color: #d32f2f;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .ven-events-table th, 
+    .ven-events-table td {
+        padding: 8px 10px;
+        font-size: 13px;
+    }
+}
