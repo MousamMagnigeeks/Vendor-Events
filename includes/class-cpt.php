@@ -6,9 +6,23 @@ class VEN_CPT {
     public $post_type = 'vendor_event';
 
     public function __construct() {
+        add_action('admin_enqueue_scripts', array($this, 'admin_enqueue_assets'));
+
         add_action('init', array($this, 'register_cpt'));
         add_action('add_meta_boxes', [$this, 'add_event_metabox']);
         add_action('save_post_' . $this->post_type, array($this, 'on_save'), 10, 3);
+        add_action('init', array($this, 'register_unpublished_status'));
+
+        add_action('admin_footer-post.php', array($this, 'add_unpublished_to_dropdown'));
+        add_action('admin_footer-post-new.php', array($this, 'add_unpublished_to_dropdown'));
+        add_action('admin_footer-edit.php', array($this, 'add_unpublished_to_dropdown_into_inline_edit'));
+
+        // Add and manage the column
+        add_filter( 'manage_vendor_event_posts_columns', [ $this, 'add_status_column' ] );
+        add_action( 'manage_vendor_event_posts_custom_column', [ $this, 'render_status_column' ], 10, 2 );
+
+        // Optional: make column sortable
+        add_filter( 'manage_edit-vendor_event_sortable_columns', [ $this, 'make_status_sortable' ] );
 
         add_filter('views_edit-vendor_event', array($this, 'add_recently_published_tab'));
         add_action('pre_get_posts', array($this, 'filter_vendor_event_recently_published'));
@@ -24,6 +38,41 @@ class VEN_CPT {
         add_filter('parse_query', [$this, 'filter_admin_query']);
     }
 
+    public function admin_enqueue_assets($hook) {
+        // only load on post edit screens
+        if ( ! in_array( $hook, [ 'post.php', 'post-new.php' ], true ) ) {
+            return;
+        }
+
+        global $post;
+        if ( empty( $post ) || $post->post_type !== 'vendor_event' ) {
+            return;
+        }
+
+        wp_enqueue_script(
+            'ven-unpublished-admin',
+            VEN_PLUGIN_URL . 'assets/js/ven-unpublished-admin.js',
+            [ 'jquery' ],
+            '1.0',
+            true
+        );
+
+        wp_enqueue_style(
+            'ven-unpublished-admin',
+            VEN_PLUGIN_URL . 'assets/css/ven-unpublished-admin.css',
+            [],
+            '1.0'
+        );        
+
+        wp_localize_script( 'ven-unpublished-admin', 'venUnpublish',
+            [
+                'ajax_url' => admin_url( 'admin-ajax.php' ),
+                'nonce'    => wp_create_nonce( 'ven_unpublish_reason' ),
+                'post_id'  => (int) $post->ID,
+            ]
+        );
+
+    }
     public function register_cpt() {
         $this->post_type = 'vendor_event';
     
@@ -58,6 +107,95 @@ class VEN_CPT {
             'high'
         );
     }
+
+    public function register_unpublished_status() {
+        register_post_status('unpublished', [
+            'label'                     => _x('Unpublished', 'post'),
+            'public'                    => true,
+            'exclude_from_search'       => true,
+            'show_in_admin_all_list'    => true,
+            'show_in_admin_status_list' => true,
+            'label_count'               => _n_noop('Unpublished <span class="count">(%s)</span>', 'Unpublished <span class="count">(%s)</span>'),
+        ]);
+    }
+
+    public function add_unpublished_to_dropdown() {
+        global $post;
+        if ( ! $post || $post->post_type !== 'vendor_event' ) {
+            return;
+        }
+
+        $vendor_status = get_post_meta( $post->ID, 'ven_vendor_status', true );
+        if ( $vendor_status !== 'applied' ) {
+            return;
+        }
+        ?>
+        <script>
+            jQuery( function( $ ) {
+                // add our custom post status
+                $( '#post_status' ).append( '<option value="unpublished">Unpublished</option>' )
+
+                <?php if( 'unpublished' === get_post_status() ) : ?>
+                    $( '#post-status-display' ).text( 'Unpublished' )
+                    $( '#post_status' ).val( 'unpublished' )
+                <?php endif; ?>
+            } )
+        </script>
+        <?php
+    }
+
+    public function add_unpublished_to_dropdown_into_inline_edit() {
+        ?><script>
+        jQuery( function($) {
+            $( 'select[name="_status"]' ).append( '<option value="unpublished">Unpublished</option>' );
+        } );
+        </script><?php
+    }
+
+    /**
+     * Add "Status" column to vendor_event post list.
+     */
+    public function add_status_column( $columns ) {
+        $new_columns = [];
+        foreach ( $columns as $key => $label ) {
+            $new_columns[ $key ] = $label;
+            if ( $key === 'title' ) {
+                $new_columns['post_status'] = __( 'Status', 'textdomain' );
+            }
+        }
+        return $new_columns;
+    }
+
+    /**
+     * Output the status value in each row.
+     */
+    public function render_status_column( $column, $post_id ) {
+        if ( $column !== 'post_status' ) {
+            return;
+        }
+
+        $status = get_post_status( $post_id );
+
+        // Map status to readable label and color
+        $labels = [
+            'publish'     => '<span style="color:green;font-weight:600;">Published</span>',
+            'draft'       => '<span style="color:gray;">Draft</span>',
+            'pending'     => '<span style="color:orange;">Pending</span>',
+            'trash'       => '<span style="color:red;">Trash</span>',
+            'unpublished' => '<span style="color:#a00;">Unpublished</span>',
+        ];
+
+        echo isset( $labels[ $status ] ) ? $labels[ $status ] : esc_html( ucfirst( $status ) );
+    }
+
+    /**
+     * Make the "Status" column sortable.
+     */
+    public function make_status_sortable( $columns ) {
+        $columns['post_status'] = 'post_status';
+        return $columns;
+    }
+    
     public function add_recently_published_tab($views) {
         global $wpdb;
 
@@ -150,11 +288,21 @@ class VEN_CPT {
             </tr>
             <tr>
                 <th><label for="ven_country">Country</label></th>
-                <td><input type="text" id="ven_country" name="ven_country" value="<?php echo esc_attr($country); ?>" class="regular-text" /></td>
+                <td>
+                    <select name="ven_country" id="ven_country">
+                        <option value="">Select Country</option>
+                        <option value="US" <?php selected($country, 'US'); ?>>United States</option>
+                        <option value="Canada" <?php selected($country, 'Canada'); ?>>Canada</option>
+                    </select>
+                </td>
             </tr>
             <tr>
-                <th><label for="ven_state">State</label></th>
-                <td><input type="text" id="ven_state" name="ven_state" value="<?php echo esc_attr($state); ?>" class="regular-text" /></td>
+                <th><label for="ven_state">State / Province</label></th>
+                <td>
+                    <select name="ven_state" id="ven_state_province">
+                        <option value="">Select State/Province</option>
+                    </select>
+                </td>
             </tr>
             <tr>
                 <th><label for="ven_vendor_status">Vendor Status</label></th>
@@ -179,7 +327,12 @@ class VEN_CPT {
                 <td><input type="number" id="ven_vendor_id" name="ven_vendor_id" value="<?php echo esc_attr($vendor_id); ?>" class="small-text" /></td>
             </tr>
         </table>
-
+        <script>
+            window.venLocationData = {
+                selectedCountry: "<?php echo esc_js($country); ?>",
+                selectedState: "<?php echo esc_js($state); ?>"
+            };
+        </script>
         <?php
     }
 
@@ -317,7 +470,43 @@ class VEN_CPT {
             printf('<option value="%s" %s>%s</option>', esc_attr($state), selected($selected_state, $state, false), esc_html($state));
         }
         echo '</select>';
+
+        // 🔹 Vendor Name Filter
+        $selected_vendor = isset($_GET['ven_vendor_id']) ? intval($_GET['ven_vendor_id']) : '';
+        $vendors = $this->get_vendors_with_published_posts();
+
+        echo '<select name="ven_vendor_id">';
+        echo '<option value="">All Vendors</option>';
+        foreach ($vendors as $vendor_id => $vendor_name) {
+            printf('<option value="%d" %s>%s</option>', $vendor_id, selected($selected_vendor, $vendor_id, false), esc_html($vendor_name));
+        }
+        echo '</select>';
     }
+
+    private function get_vendors_with_published_posts() {
+        $args = [
+            'post_type'      => $this->post_type,
+            'post_status'    => 'all',
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+        ];
+        $post_ids = get_posts($args);
+    
+        $vendors = [];
+    
+        foreach ($post_ids as $post_id) {
+            $vendor_id = get_post_field('post_author', $post_id);
+            if ($vendor_id) {
+                $vendor = get_userdata($vendor_id);
+                if ($vendor) {
+                    $vendors[$vendor_id] = $vendor->display_name;
+                }
+            }
+        }
+    
+        asort($vendors); // Sort alphabetically by name
+        return $vendors;
+    }    
 
     public function filter_admin_query($query) {
         global $pagenow;
@@ -350,6 +539,11 @@ class VEN_CPT {
     
         if (!empty($meta_query)) {
             $query->set('meta_query', $meta_query);
+        }
+
+        // 🔹 Filter by Vendor (Author)
+        if (!empty($_GET['ven_vendor_id'])) {
+            $query->set('author', intval($_GET['ven_vendor_id']));
         }
     }
 

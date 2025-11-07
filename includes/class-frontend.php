@@ -199,7 +199,7 @@ class VEN_Frontend {
             $post_id = wp_insert_post(array(
                 'post_type'   => 'vendor_event',
                 'post_title'  => $event_title,
-                'post_status' => 'publish',
+                'post_status' => 'unpublished',
                 'post_author' => $user_id,
             ));
     

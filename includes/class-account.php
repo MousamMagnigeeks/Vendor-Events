@@ -65,6 +65,7 @@ class VEN_Account {
             'orderby'        => 'meta_value',
             'meta_key'       => 'ven_start_date',
             'order'          => 'DESC',
+            'post_status'    => ['publish', 'unpublished'],
         ));
         ?>
         <h2>Your Events</h2>
@@ -78,6 +79,7 @@ class VEN_Account {
                 <thead>
                     <tr>
                         <th>Title</th>
+                        <th>Post Status</th> 
                         <th>Status</th>
                         <th>Start Date</th>
                         <th>State</th>
@@ -93,9 +95,26 @@ class VEN_Account {
                         $state = get_post_meta($pid, 'ven_state', true);
                         $delete_url = wp_nonce_url(admin_url('admin-post.php?action=ven_delete_event&post=' . $pid), 'ven_delete_event_' . $pid);
                         $edit_link = add_query_arg(array('action' => 'edit', 'post_id' => $pid), wc_get_account_endpoint_url('my-events'));
+
+                        // ✅ Get actual post status (publish / unpublished / draft etc.)
+                        $post_status = get_post_status($pid);
+
+                        // Optional: make it more readable with colors
+                        $status_labels = [
+                            'publish'     => '<span style="color:green;font-weight:600;">Published</span>',
+                            'unpublished' => '<span style="color:#a00;font-weight:600;">Unpublished</span>',
+                            'draft'       => '<span style="color:gray;">Draft</span>',
+                            'pending'     => '<span style="color:orange;">Pending</span>',
+                            'trash'       => '<span style="color:red;">Trashed</span>',
+                        ];
                     ?>
                     <tr>
                         <td><?php echo esc_html($title); ?></td>
+                        <td>
+                            <?php echo isset($status_labels[$post_status]) 
+                                ? $status_labels[$post_status] 
+                                : esc_html(ucfirst($post_status)); ?>
+                        </td>
                         <td>
                             <select class="ven-status-select-frontend" data-event-id="<?php echo esc_attr($pid); ?>">
                                 <option value="applied" <?php selected($status, 'applied'); ?>>Applied/Waitlist</option>

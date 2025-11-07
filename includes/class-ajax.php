@@ -7,8 +7,62 @@ class VEN_Ajax {
         add_action('wp_ajax_ven_fetch_title', array($this, 'fetch_title'));
         add_action('wp_ajax_nopriv_ven_fetch_title', array($this, 'fetch_title'));
         add_action('wp_ajax_ven_update_event_status', array($this, 'ven_update_event_status'));
+        add_action( 'wp_ajax_ven_send_unpublish_reason', [ $this, 'ajax_send_unpublish_reason' ] );
     }
 
+    public function ajax_send_unpublish_reason() {
+        check_ajax_referer( 'ven_unpublish_reason', 'nonce' );
+    
+        $post_id = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
+        $reason  = isset( $_POST['reason'] ) ? sanitize_textarea_field( wp_unslash( $_POST['reason'] ) ) : '';
+    
+        if ( ! $post_id || empty( $reason ) ) {
+            wp_send_json_error( [ 'message' => 'Invalid request. Provide a reason.' ] );
+        }
+    
+        // ensure current user can edit this post
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+            wp_send_json_error( [ 'message' => 'You do not have permission to perform this action.' ] );
+        }
+    
+        // save meta
+        update_post_meta( $post_id, 'unpublish_reason', $reason );
+        update_post_meta( $post_id, 'last_unpublished_by', get_current_user_id() );
+        update_post_meta( $post_id, 'last_unpublished_at', current_time( 'mysql' ) );
+    
+        // set post_status to 'unpublished' if not already (use wp_update_post so WP hooks run)
+        $post = get_post( $post_id );
+        if ( $post && $post->post_status !== 'unpublished' ) {
+            wp_update_post( [
+                'ID' => $post_id,
+                'post_status' => 'unpublished',
+            ] );
+        }
+    
+        // Send email to vendor (post author)
+        $vendor_id = get_post_field( 'post_author', $post_id );
+        $vendor    = get_userdata( $vendor_id );
+        $to        = $vendor ? $vendor->user_email : '';
+    
+        if ( $to ) {
+            $subject = sprintf( 'Your event "%s" was unpublished', get_the_title( $post_id ) );
+            $message = sprintf(
+                "Hello %s,\n\nYour event \"%s\" has been unpublished by the site team.\n\nReason:\n%s\n\nRegards,\n%s",
+                $vendor ? $vendor->display_name : 'Vendor',
+                get_the_title( $post_id ),
+                $reason,
+                get_bloginfo( 'name' )
+            );
+    
+            // optional headers (from)
+            $headers = [ 'Content-Type: text/plain; charset=UTF-8' ];
+    
+            wp_mail( $to, $subject, $message, $headers );
+        }
+    
+        wp_send_json_success( [ 'message' => 'Reason saved and email sent to vendor.' ] );
+    }
+    
     public function fetch_title() {
         check_ajax_referer('ven_ajax_nonce', 'nonce');
 
